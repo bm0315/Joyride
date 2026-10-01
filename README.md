@@ -115,6 +115,9 @@ Packs made by models outside the local reference-image whitelist remain playable
 Anthropic keys are stored independently for future orchestration features, but the generation button is
 disabled for Anthropic because Claude does not produce image output.
 
+Support email: `bm0315@msn.com`. Waitlist and feedback-form buttons stay visibly disabled until their
+HTTPS destinations are configured in the app bundle.
+
 Without a key, Joyride does not upload a photo or silently use platform credits. A platform-funded
 generation route is reserved for a later release. The platform-owned asset is only the versioned scene
 prompt matrix.
@@ -144,6 +147,13 @@ hermes plugins enable joyride
 ```
 
 The adapter uses `pre_llm_call`, `pre_tool_call`, `post_tool_call`, and `on_session_end`.
+
+## Upgrading from the 8765 build
+
+Joyride now defaults to `127.0.0.1:18765`. Upgrade the macOS app and every installed OpenClaw or Hermes
+adapter together; upgrading only one side leaves the adapter pointed at the old port. Custom deployments
+must keep `JOYRIDE_PORT`, `JOYRIDE_ENDPOINT`, or the OpenClaw endpoint setting aligned. Joyride does not
+bind port 8765 as a compatibility listener because another local service may already own it.
 
 ## Test and benchmark
 

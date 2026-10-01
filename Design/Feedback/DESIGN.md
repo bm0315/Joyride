@@ -14,6 +14,7 @@ The app reads these optional deployment values from its bundle configuration:
 - `JoyrideTelemetryEndpoint`
 
 Missing values are displayed as not configured. The app must never invent an email address or service URL.
+The official build ships with `bm0315@msn.com` as its support email. Waitlist, feedback-form, and telemetry URLs remain unset until their owners provide explicit HTTPS destinations.
 
 ## User interface
 

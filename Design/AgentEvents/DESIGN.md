@@ -30,6 +30,8 @@ Run and agent IDs are hashed in the agent process before transmission. Tool name
 
 The canonical default endpoint is `http://127.0.0.1:18765/v1/events`. Port 8765 is already occupied by another local service on the development Mac, so keeping it would leave the player running without an event listener. The app, official adapters, CLI examples, benchmark tool, and protocol documentation must use the same default. `JOYRIDE_PORT`, `JOYRIDE_ENDPOINT`, and the OpenClaw endpoint setting remain explicit overrides.
 
+An upgrade notice must tell users to update the app and adapter together when moving from the former default port. The player does not bind the former port as a compatibility listener because doing so could interfere with the service that already owns it.
+
 ## Acceptance criteria
 
 - Every adapter emits one `run_started` before any event in a run.
@@ -37,3 +39,4 @@ The canonical default endpoint is `http://127.0.0.1:18765/v1/events`. Port 8765 
 - The protocol schema and manifest triggers contain no `model_finished` or `idle` event kinds.
 - Adapter tests cover first-event ordering, repeated model calls, tool-first ordering, and completion.
 - The app and official clients agree on port `18765` when no override is configured.
+- The README documents the coordinated app-and-adapter upgrade requirement.

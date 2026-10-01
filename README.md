@@ -1,6 +1,6 @@
 # Joyride
 
-**An enhanced companion plug-in for the Muse virtual avatar.**
+*From "I'm busy" to "here's what I'm doing" — 24 living states, downloadable skins, zero task data leaves your Mac.*
 
 Joyride turns an agent's real work into a living desktop character. It reads privacy-minimized lifecycle
 events from supported agents, chooses the winning state when several agents are active, and plays the

@@ -58,7 +58,7 @@ def measure_resources(process_name: str, seconds: int) -> tuple[float, float]:
 def measure_transition(base_url: str, sample: int, state_hint: str) -> float:
     activity_id = f"benchmark-{sample}"
     payload = {
-        "protocol": "agent-avatar/1",
+        "protocol": "joyride/1",
         "source": "benchmark",
         "kind": "tool_started",
         "activity_id": activity_id,
@@ -78,7 +78,7 @@ def measure_transition(base_url: str, sample: int, state_hint: str) -> float:
                 f"{base_url}/v1/events",
                 "POST",
                 {
-                    "protocol": "agent-avatar/1",
+                    "protocol": "joyride/1",
                     "source": "benchmark",
                     "kind": "run_finished",
                     "activity_id": activity_id,
@@ -93,7 +93,9 @@ def wait_for_idle(base_url: str) -> None:
     deadline = time.monotonic() + 7
     while time.monotonic() < deadline:
         metrics = request_json(f"{base_url}/v1/metrics", "GET", None)
-        if metrics.get("state") in {"resting", "staring_at_owner", "daydreaming_hearts"}:
+        if metrics.get("state") in {
+            "resting", "idle", "staring_at_owner", "daydreaming_hearts", "goodnight", "dreaming",
+        }:
             return
         time.sleep(0.1)
     raise RuntimeError("Timed out waiting for the player to return to idle")

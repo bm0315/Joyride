@@ -1,34 +1,29 @@
 # Joyride Protocol
 
-This document defines both **Avatar Pack v1**, the downloadable product format, and `agent-avatar/1`,
-the local event protocol between agents and the Joyride player. Pack assets are independent of agent
-SDKs: adapters publish state, while the player selects media from the active pack.
+This document defines Avatar Pack v3 and the `joyride/1` loopback event protocol. Packs are independent of agent SDKs: adapters publish privacy-minimized lifecycle events, the player arbitrates a state, and the selected pack supplies the media.
 
-## Avatar Pack v1
+## Avatar Pack v3
 
 ### Archive layout
 
-A distributable pack is a ZIP archive with a manifest and an image directory at its root:
+A distributable pack is a ZIP archive with this root layout:
 
 ```text
 manifest.json
 images/
   anchor.webp
   working.webp
-  thinking.webp
   …
 ```
 
-Joyride also accepts one enclosing top-level directory. Every resource path must remain under `images/`.
-Absolute paths, `..` segments, and symbolic links are rejected. The client limits archives to 200 MB and
-expanded packs to 500 MB.
+One enclosing top-level directory is accepted. Every resource must stay under `images/`. Absolute paths, `..` segments, and symbolic links are rejected. Archives are limited to 200 MB compressed and 500 MB expanded.
 
-### manifest.json
+### Manifest
 
 ```json
 {
-  "format": "agent-avatar-pack",
-  "format_version": 1,
+  "format": "joyride-pack",
+  "format_version": 3,
   "id": "com.example.blue-friend",
   "name": "Blue Friend",
   "version": "1.0.0",
@@ -37,14 +32,15 @@ expanded packs to 500 MB.
     "anchor_image_hash": "64-character-lowercase-sha256"
   },
   "generator": {
-    "provider": "openai",
-    "model": "gpt-image-2.5-sunburst",
-    "prompt_version": "avatar-scenes-1.0.0"
+    "provider": "google",
+    "model": "gemini-3.1-flash-image",
+    "prompt_version": "joyride-scenes-3.0.0"
   },
   "states": [
     {
       "id": "working",
-      "triggers": ["run_started", "tool:default"],
+      "tier": "basic",
+      "triggers": ["tool:default"],
       "priority": 3,
       "media": {"path": "images/working.webp", "type": "image"},
       "reference_anchor_hash": "same-sha256-as-character",
@@ -60,82 +56,63 @@ expanded packs to 500 MB.
 
 Rules:
 
-- `format` is exactly `agent-avatar-pack`. The current `format_version` is integer `1`. Newer versions
-  are rejected explicitly instead of being silently downgraded.
-- `id` is a stable product identifier containing 1–80 lowercase letters, digits, dots, underscores, or
-  hyphens.
-- `character.anchor_image_hash` is the SHA-256 digest of the anchor file. Joyride recomputes it on import.
-- A v1 pack contains exactly one copy of all eight standard states.
-- Every state's `reference_anchor_hash` equals the character anchor hash. The official generation
-  pipeline uploads the same anchor file for every generation call, making its consistency source
-  auditable. For a third-party finished pack, the client can verify the declared binding but cannot infer
-  from output pixels whether a remote generator honestly used the reference.
-- `generator` records the provider, model, and platform scene-prompt matrix version. Certification is
-  derived from a local client whitelist. A package cannot certify itself.
-- `triggers` are declarative marketplace metadata. Runtime arbitration remains event-driven.
+- `format` is `joyride-pack`; `format_version` is integer `3`.
+- `id` contains 1–80 lowercase letters, digits, dots, underscores, or hyphens.
+- Every state requires `tier`. Its value must match the canonical matrix below.
+- State IDs are unique. A pack may supply one or more states; the player resolves omitted states through its versioned semantic fallback graph.
+- `character.anchor_image_hash` is the SHA-256 of the anchor bytes and is recomputed on import.
+- Every `reference_anchor_hash` equals the character anchor hash. The official generation pipeline submits the same reference bytes for every state request.
+- `generator` records provider, model, and prompt-matrix version. Certification is derived from the player registry; a pack cannot certify itself.
+- `triggers` are declarative metadata. Runtime behavior is driven by events and local idle policy.
 
-### Standard states
+### Canonical state matrix
 
-| `id` | Suggested trigger | Default priority |
-| --- | --- | ---: |
-| `working` | General tool execution or private mode | 3 |
-| `checking_flights` | Flight search or booking | 4 |
-| `shopping` | Product comparison, cart, or purchase | 4 |
-| `staring_at_owner` | Random idle scene | 2 |
-| `thinking` | Model call, planning, or post-tool reasoning | 3 |
-| `researching` | Search, browsing, or document reading | 4 |
-| `resting` | Random idle scene | 1 |
-| `daydreaming_hearts` | Random idle scene | 2 |
+| Tier | State IDs |
+| --- | --- |
+| `basic` | `working`, `thinking`, `researching`, `coding`, `finding_files`, `waiting`, `greeting`, `idle` |
+| `advanced` | `checking_flights`, `booking_hotel`, `travel`, `calendar`, `shopping`, `unboxing`, `meeting`, `food_ordering` |
+| `emotional` | `staring_at_owner`, `daydreaming_hearts`, `resting`, `dreaming`, `grooming`, `celebrating`, `missing_you`, `goodnight` |
+
+The requested state remains visible in the UI even when its media falls back. Preferred mappings include coding and file work to `working`; hotel and travel to `researching`; calendar and meeting to `working`; unboxing and food ordering to `shopping`; dreaming and goodnight to `resting`; and grooming or missing-you to `staring_at_owner`. A same-tier asset, then the first pack asset, is the final fallback for partial tier packs.
 
 ### Animation reservation
 
-`media.type` accepts `image`, `animated_image`, or `video`. The optional `animation` object follows these
-rules:
-
-- Static art should use `kind: "static"` and `fallback: "programmatic_micro_motion"`.
-- Animated image packages use `animated_image`; short videos use `video` and should be silent and loopable.
-- When animation is unsupported or suspended for power saving, the player displays a static first frame
-  or programmatic micro-motion without changing the protocol version.
+`media.type` accepts `image`, `animated_image`, or `video`. Static art uses `kind: "static"` and may request `programmatic_micro_motion`. Animated images and silent loopable video are preloaded when possible. When playback is suspended, Joyride displays a static frame without changing the protocol version.
 
 ### Model certification
 
-The certification whitelist contains only models confirmed to support reference-image editing and used by
-a pipeline that actually reuses the anchor. Registry version `2026-10-01` contains:
+Registry version `2026-10-02` certifies reference-image models by provider:
 
-- OpenAI: `gpt-image-2.5-sunburst`, `gpt-image-2.5-flare`, `gpt-image-2`, and
-  `gpt-image-2-2026-04-21`.
+- OpenAI: `gpt-image-2.5-sunburst`, `gpt-image-2.5-flare`, `gpt-image-2`, `gpt-image-2-2026-04-21`
+- Google: `gemini-3.1-flash-image`, `gemini-3-pro-image`
+- Anthropic: no image-output model is certified
 
-Packs made by other models can still be imported and played. They are labeled **Uncertified** and cannot
-enter marketplace recommendations. The local, versioned client registry cannot be overridden by a pack.
+Uncertified packs remain importable and playable, but are excluded from marketplace recommendations.
 
-### BYOK generation rules
+### BYOK generation
 
-- The API key stays in the user's macOS Keychain. Joyride sends images directly to the selected service,
-  and usage is billed to that key.
-- The platform distributes only a versioned scene-prompt matrix; it does not receive the key or photo.
-- All eight state requests upload the same anchor bytes and write the same SHA-256 into every state.
-- The user must confirm ownership or authorization before generation from a photo.
-- Platform-funded generation is reserved but not implemented in v1. A missing key never causes an
-  implicit upload or paid fallback.
+- OpenAI, Google, and Anthropic credentials are stored as separate macOS Keychain items.
+- OpenAI and Google can render packs with a shared reference image. Anthropic credentials are accepted for future orchestration, but generation is disabled because Claude does not produce image output.
+- Generation creates one eight-state tier at a time and includes the same anchor in every request.
+- The user must confirm portrait ownership or authorization.
+- The platform supplies only the scene prompt matrix. Keys, photos, and provider usage stay between the Mac and the selected provider.
 
-## Local event protocol: agent-avatar/1
+## Local event protocol: joyride/1
 
-Joyride listens only on `127.0.0.1:8765` and does not accept remote connections.
+Joyride listens only on `127.0.0.1:8765`.
 
 ### Endpoints
 
-- `GET /health`: liveness check.
-- `GET /v1/config`: exposes `privacy_mode` and `keyword_blacklist` to local adapters.
-- `GET /v1/metrics`: returns the latest render latency, current state, concurrent activity count, and
-  supported pack version.
-- `POST /v1/events`: submits one lifecycle event and returns HTTP 202 on acceptance.
+- `GET /health`: liveness.
+- `GET /v1/config`: local privacy mode and keyword blacklist for adapters.
+- `GET /v1/metrics`: render latency, current state, unique active-agent count, and supported pack version.
+- `POST /v1/events`: accepts one event and returns HTTP 202.
 
-The maximum request body is 8 KiB. Unknown fields are ignored and required fields receive runtime
-validation.
+The maximum request body is 8 KiB. Unknown fields are ignored; known fields receive runtime validation.
 
 ```json
 {
-  "protocol": "agent-avatar/1",
+  "protocol": "joyride/1",
   "source": "openclaw",
   "kind": "tool_started",
   "activity_id": "opaque-run-id",
@@ -145,35 +122,36 @@ validation.
 }
 ```
 
-### Events and state mapping
+### Events
 
-| `kind` | Default result |
+| Kind | Result |
 | --- | --- |
-| `run_started` | `thinking` |
-| `model_started` | `thinking` |
-| `model_finished` | `working` |
+| `run_started` | Creates a run in `thinking` |
+| `model_started` | Selects `thinking` |
 | `tool_started` | Uses `state_hint`, otherwise classifies the tool name |
-| `tool_finished` | Returns to `thinking` |
-| `run_finished` | Clears the activity |
-| `idle` | Clears all activities from that `source` |
+| `tool_finished` | Returns that run to `thinking` |
+| `run_finished` | Removes the run |
 
-`state_hint` accepts all eight standard states. Official OpenClaw and Hermes adapters publish work states.
-When no work remains, the player chooses among the three idle states every 20–38 seconds.
+Official adapters emit exactly one `run_started` before the first model or tool event in a run. Idle is derived by the player after no active runs remain; there is no external `idle` event. Likewise, the protocol has no `model_finished` event because current adapters cannot emit it consistently.
 
 ### Privacy contract
 
 - Prompts, replies, tool arguments, and tool results are never sent to Joyride.
-- Task, session, and tool-call identifiers are SHA-256 hashed and truncated to 24 opaque characters.
-- An adapter temporarily examines tool names and arguments inside the agent process, then sends only the
-  inferred state.
-- Adapters refresh local privacy configuration within five seconds. A blacklist match sends only
-  `working`.
-- Private mode also forces every active state to `working` inside the player, protecting users of older
-  adapters.
-- Official adapters accept only loopback HTTP endpoints.
+- Session and tool-call IDs are SHA-256 hashed and truncated in the agent process.
+- Adapters inspect tool context locally, then send only an inferred state.
+- Blacklist matches publish only neutral `working`. Private mode also forces active presentation to `working` in the player.
+- Official adapters accept loopback HTTP event endpoints only.
 
-### Concurrent arbitration
+### Concurrency
 
-- Joyride displays one winner. Higher priority wins; the most recently updated candidate breaks ties.
-- Work states remain visible for at least five seconds to prevent rapid tool calls from flickering.
-- A `+N` badge shows hidden concurrent agents and expands into their current states.
+- Internal runs and tools are grouped by `source` before presentation.
+- Each source contributes one highest-priority, most-recent representative state.
+- The global winner is shown. The badge is `unique active agents - 1`, and the expanded list contains one row per active source.
+
+### Emotional idle policy
+
+Emotional states are deterministic rather than random. Daytime idle progresses from `resting` to neutral `idle`, then one attention interval of `staring_at_owner`, then `daydreaming_hearts`. Late-night idle uses `goodnight` and `dreaming`. A local pre-notification action may temporarily request `staring_at_owner`; it is not a network event.
+
+## Feedback and telemetry
+
+Waitlist, feedback form, support email, and telemetry destinations are deployment configuration. Missing values remain visibly unconfigured. Anonymous product metrics are opt-in and off by default. The only accepted properties are state tier, model provider, and normalized outcome; prompts, task text, tool payloads, filenames, IDs, keys, and images are forbidden. A global 100-person threshold is displayed only when a trusted waitlist service provides the count.

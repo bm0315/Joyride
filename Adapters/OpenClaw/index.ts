@@ -3,19 +3,27 @@ import { definePluginEntry } from "openclaw/plugin-sdk/plugin-entry";
 
 type AvatarState =
   | "working"
+  | "coding"
+  | "finding_files"
   | "checking_flights"
+  | "booking_hotel"
+  | "travel"
+  | "calendar"
   | "shopping"
+  | "meeting"
+  | "food_ordering"
   | "thinking"
   | "researching";
 
 type EventKind =
+  | "run_started"
   | "model_started"
   | "tool_started"
   | "tool_finished"
   | "run_finished";
 
 type AvatarEvent = {
-  protocol: "agent-avatar/1";
+  protocol: "joyride/1";
   source: "openclaw";
   kind: EventKind;
   activity_id: string;
@@ -61,8 +69,29 @@ function inferState(toolName: string, params: Record<string, unknown>): AvatarSt
   if (containsAny(text, flightKeywords)) {
     return "checking_flights";
   }
+  if (containsAny(text, hotelKeywords)) {
+    return "booking_hotel";
+  }
+  if (containsAny(text, travelKeywords)) {
+    return "travel";
+  }
+  if (containsAny(text, calendarKeywords)) {
+    return "calendar";
+  }
   if (containsAny(text, shoppingKeywords)) {
     return "shopping";
+  }
+  if (containsAny(text, foodKeywords)) {
+    return "food_ordering";
+  }
+  if (containsAny(text, meetingKeywords)) {
+    return "meeting";
+  }
+  if (containsAny(text, codeKeywords)) {
+    return "coding";
+  }
+  if (containsAny(text, fileKeywords)) {
+    return "finding_files";
   }
   if (containsAny(text, researchKeywords)) {
     return "researching";
@@ -93,6 +122,14 @@ const shoppingKeywords = [
   "jd.com", "pinduoduo", "购物", "商品", "下单", "比价",
 ] as const;
 
+const hotelKeywords = ["hotel", "lodging", "booking.com", "airbnb", "酒店", "住宿"] as const;
+const travelKeywords = ["itinerary", "travel", "trip_plan", "maps", "行程", "旅行", "攻略"] as const;
+const calendarKeywords = ["calendar", "schedule", "event.create", "日历", "日程"] as const;
+const foodKeywords = ["restaurant", "food", "meal", "delivery", "外卖", "点餐", "餐厅"] as const;
+const meetingKeywords = ["meeting", "zoom", "teams", "email", "mail", "会议", "邮件"] as const;
+const codeKeywords = ["terminal", "shell", "exec", "command", "code", "compile", "build", "test", "git"] as const;
+const fileKeywords = ["file", "folder", "filesystem", "read_file", "write_file", "glob", "find", "文件", "目录"] as const;
+
 const researchKeywords = [
   "browser", "browse", "search", "research", "web", "fetch", "crawl", "scrape",
   "read_url", "perplexity", "google", "bing", "搜索", "查找", "资料", "网页",
@@ -108,6 +145,7 @@ export default definePluginEntry({
     let lastWarningAt = 0;
     let privacyConfig: PrivacyConfig = { privacy_mode: false, keyword_blacklist: [] };
     let configExpiresAt = 0;
+    const runStarts = new Map<string, Promise<void>>();
 
     const readPrivacyConfig = async (): Promise<PrivacyConfig> => {
       if (Date.now() < configExpiresAt) {
@@ -174,45 +212,78 @@ export default definePluginEntry({
       }
     };
 
-    api.on("model_call_started", (event, context) => {
-      void postEvent({
-        protocol: "agent-avatar/1",
+    const ensureRunStarted = async (activityID: string): Promise<void> => {
+      const existing = runStarts.get(activityID);
+      if (existing !== undefined) {
+        await existing;
+        return;
+      }
+      const started = postEvent({
+        protocol: "joyride/1",
         source: "openclaw",
-        kind: "model_started",
-        activity_id: opaqueID(context.runId ?? event.runId, "openclaw-run"),
+        kind: "run_started",
+        activity_id: activityID,
       });
+      runStarts.set(activityID, started);
+      await started;
+    };
+
+    api.on("model_call_started", (event, context) => {
+      const activityID = opaqueID(context.runId ?? event.runId, "openclaw-run");
+      void (async () => {
+        await ensureRunStarted(activityID);
+        await postEvent({
+          protocol: "joyride/1",
+          source: "openclaw",
+          kind: "model_started",
+          activity_id: activityID,
+        });
+      })();
     });
 
     api.on("before_tool_call", (event, context) => {
-      void postEvent({
-        protocol: "agent-avatar/1",
-        source: "openclaw",
-        kind: "tool_started",
-        activity_id: opaqueID(context.runId ?? event.runId, "openclaw-run"),
-        operation_id: opaqueID(context.toolCallId ?? event.toolCallId, event.toolName),
-        tool: "private",
-        state_hint: inferState(event.toolName, event.params),
-      }, { toolName: event.toolName, params: event.params });
+      const activityID = opaqueID(context.runId ?? event.runId, "openclaw-run");
+      void (async () => {
+        await ensureRunStarted(activityID);
+        await postEvent({
+          protocol: "joyride/1",
+          source: "openclaw",
+          kind: "tool_started",
+          activity_id: activityID,
+          operation_id: opaqueID(context.toolCallId ?? event.toolCallId, event.toolName),
+          tool: "private",
+          state_hint: inferState(event.toolName, event.params),
+        }, { toolName: event.toolName, params: event.params });
+      })();
     });
 
     api.on("after_tool_call", (event, context) => {
-      void postEvent({
-        protocol: "agent-avatar/1",
-        source: "openclaw",
-        kind: "tool_finished",
-        activity_id: opaqueID(context.runId ?? event.runId, "openclaw-run"),
-        operation_id: opaqueID(context.toolCallId ?? event.toolCallId, event.toolName),
-        tool: "private",
-      });
+      const activityID = opaqueID(context.runId ?? event.runId, "openclaw-run");
+      void (async () => {
+        await ensureRunStarted(activityID);
+        await postEvent({
+          protocol: "joyride/1",
+          source: "openclaw",
+          kind: "tool_finished",
+          activity_id: activityID,
+          operation_id: opaqueID(context.toolCallId ?? event.toolCallId, event.toolName),
+          tool: "private",
+        });
+      })();
     });
 
     api.on("agent_end", (event, context) => {
-      void postEvent({
-        protocol: "agent-avatar/1",
-        source: "openclaw",
-        kind: "run_finished",
-        activity_id: opaqueID(context.runId ?? event.runId, "openclaw-run"),
-      });
+      const activityID = opaqueID(context.runId ?? event.runId, "openclaw-run");
+      void (async () => {
+        await ensureRunStarted(activityID);
+        await postEvent({
+          protocol: "joyride/1",
+          source: "openclaw",
+          kind: "run_finished",
+          activity_id: activityID,
+        });
+        runStarts.delete(activityID);
+      })();
     });
   },
 });

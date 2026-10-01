@@ -1,10 +1,12 @@
-import AgentAvatarCore
+import JoyrideCore
 import AppKit
 
 @MainActor
 final class SettingsWindowController: NSWindowController {
     private let library: AvatarPackLibrary
     private let preferences: AppPreferences
+    private let feedbackConfiguration: FeedbackConfiguration
+    private let analytics: ProductAnalyticsStore
     private let onPackSelected: (InstalledAvatarPack) -> Void
     private let onPrivacyChanged: (Bool) -> Void
 
@@ -13,26 +15,34 @@ final class SettingsWindowController: NSWindowController {
     private let privacyCheckbox = NSButton(checkboxWithTitle: "Private mode: show neutral working during tasks", target: nil, action: nil)
     private let blacklistField = NSTextField()
     private let apiKeyField = NSSecureTextField()
+    private let providerPopup = NSPopUpButton()
     private let modelPopup = NSPopUpButton()
+    private let tierPopup = NSPopUpButton()
+    private let providerCapabilityLabel = NSTextField(labelWithString: "")
     private let photoLabel = NSTextField(labelWithString: "No reference photo selected")
     private let rightsCheckbox = NSButton(checkboxWithTitle: "I own this photo or have permission to use it", target: nil, action: nil)
     private let generationNameField = NSTextField(string: "My Avatar")
-    private let generationButton = NSButton(title: "Generate 8-state pack", target: nil, action: nil)
+    private let generationButton = NSButton(title: "Generate 8-state tier pack", target: nil, action: nil)
+    private let analyticsCheckbox = NSButton(checkboxWithTitle: "Share anonymous product metrics", target: nil, action: nil)
     private let progressLabel = NSTextField(labelWithString: "")
     private var selectedPhotoURL: URL?
 
     init(
         library: AvatarPackLibrary,
         preferences: AppPreferences,
+        feedbackConfiguration: FeedbackConfiguration,
+        analytics: ProductAnalyticsStore,
         onPackSelected: @escaping (InstalledAvatarPack) -> Void,
         onPrivacyChanged: @escaping (Bool) -> Void
     ) {
         self.library = library
         self.preferences = preferences
+        self.feedbackConfiguration = feedbackConfiguration
+        self.analytics = analytics
         self.onPackSelected = onPackSelected
         self.onPrivacyChanged = onPrivacyChanged
         let window = NSWindow(
-            contentRect: NSRect(x: 0, y: 0, width: 620, height: 650),
+            contentRect: NSRect(x: 0, y: 0, width: 620, height: 820),
             styleMask: [.titled, .closable, .miniaturizable],
             backing: .buffered,
             defer: false
@@ -56,14 +66,16 @@ final class SettingsWindowController: NSWindowController {
         let panel = NSOpenPanel()
         panel.allowedContentTypes = [.zip]
         panel.allowsMultipleSelection = false
-        panel.message = "Choose an Avatar Pack v1 ZIP archive"
+        panel.message = "Choose a Joyride Avatar Pack v3 ZIP archive"
         guard panel.runModal() == .OK, let url = panel.url else { return }
         do {
             let pack = try library.importArchive(at: url)
+            analytics.record(.packImported, tier: nil, provider: nil, outcome: "success")
             reloadValues()
             packPopup.selectItem(withTitle: pack.name)
             showMessage("Imported \(pack.name)", detail: pack.validation.certificationReason)
         } catch {
+            analytics.record(.packImported, tier: nil, provider: nil, outcome: "failure")
             showError(error)
         }
     }
@@ -74,6 +86,7 @@ final class SettingsWindowController: NSWindowController {
             let pack = try library.select(id: id)
             updatePackStatus(pack)
             onPackSelected(pack)
+            analytics.record(.packSelected, tier: nil, provider: nil, outcome: "success")
         } catch {
             showError(error)
         }
@@ -101,9 +114,10 @@ final class SettingsWindowController: NSWindowController {
 
     @objc private func saveAPIKey() {
         do {
-            try APIKeyStore.save(apiKeyField.stringValue)
+            let provider = selectedProvider()
+            try APIKeyStore.save(apiKeyField.stringValue, provider: provider)
             apiKeyField.stringValue = ""
-            progressLabel.stringValue = "API key saved to macOS Keychain."
+            progressLabel.stringValue = "\(provider.displayName) API key saved to macOS Keychain."
         } catch {
             showError(error)
         }
@@ -113,7 +127,7 @@ final class SettingsWindowController: NSWindowController {
         let panel = NSOpenPanel()
         panel.allowedContentTypes = [.png, .jpeg, .webP]
         panel.allowsMultipleSelection = false
-        panel.message = "Choose the character anchor used by all eight states"
+        panel.message = "Choose the character anchor shared by every generated state"
         guard panel.runModal() == .OK, let url = panel.url else { return }
         selectedPhotoURL = url
         photoLabel.stringValue = url.lastPathComponent
@@ -128,22 +142,34 @@ final class SettingsWindowController: NSWindowController {
             showError(AvatarPackGenerationError.portraitRightsRequired)
             return
         }
-        guard let model = modelPopup.selectedItem?.title else { return }
+        let provider = selectedProvider()
+        guard provider.supportsReferenceImageGeneration else {
+            showError(AvatarPackGenerationError.unsupportedProvider(provider))
+            return
+        }
+        guard let model = modelPopup.selectedItem?.title,
+              let tierValue = tierPopup.selectedItem?.representedObject as? String,
+              let tier = StateTier(rawValue: tierValue) else { return }
+        preferences.generationProvider = provider
         preferences.generationModel = model
+        preferences.generationTier = tier
 
         do {
-            guard let key = try APIKeyStore.read(), !key.isEmpty else {
-                throw AvatarPackGenerationError.missingAPIKey
+            guard let key = try APIKeyStore.read(provider: provider), !key.isEmpty else {
+                throw AvatarPackGenerationError.missingAPIKey(provider)
             }
             generationButton.isEnabled = false
             progressLabel.stringValue = "Preparing generation…"
             let name = generationNameField.stringValue
+            analytics.record(.generationStarted, tier: tier, provider: provider, outcome: nil)
             Task { [self] in
                 do {
-                    let temporary = try await OpenAIAvatarPackGenerator(session: .shared).generate(
+                    let temporary = try await BYOKAvatarPackGenerator(session: .shared).generate(
                         name: name,
                         anchorImage: photo,
+                        provider: provider,
                         model: model,
+                        tier: tier,
                         apiKey: key,
                         portraitRightsConfirmed: true
                     ) { [weak self] index, total, state in
@@ -160,15 +186,42 @@ final class SettingsWindowController: NSWindowController {
                     _ = try library.select(id: pack.id)
                     onPackSelected(pack)
                     progressLabel.stringValue = "Generated and activated \(pack.name)"
+                    analytics.record(.generationSucceeded, tier: tier, provider: provider, outcome: "success")
                     generationButton.isEnabled = true
                 } catch {
                     generationButton.isEnabled = true
+                    analytics.record(.generationFailed, tier: tier, provider: provider, outcome: "failure")
                     showError(error)
                 }
             }
         } catch {
             showError(error)
         }
+    }
+
+    @objc private func selectProvider() {
+        let provider = selectedProvider()
+        preferences.generationProvider = provider
+        reloadProviderControls(provider)
+    }
+
+    @objc private func saveAnalyticsPreference() {
+        preferences.analyticsOptIn = analyticsCheckbox.state == .on
+        progressLabel.stringValue = preferences.analyticsOptIn
+            ? "Anonymous product metrics enabled."
+            : "Anonymous product metrics disabled."
+    }
+
+    @objc private func openWaitlist() {
+        openFeedbackURL(feedbackConfiguration.waitlistURL)
+    }
+
+    @objc private func openFeedbackForm() {
+        openFeedbackURL(feedbackConfiguration.feedbackFormURL)
+    }
+
+    @objc private func emailSupport() {
+        openFeedbackURL(feedbackConfiguration.supportEmailURL)
     }
 
     private func configureUI(_ window: NSWindow) {
@@ -187,7 +240,7 @@ final class SettingsWindowController: NSWindowController {
             root.bottomAnchor.constraint(lessThanOrEqualTo: window.contentView!.bottomAnchor),
         ])
 
-        root.addArrangedSubview(sectionTitle("Avatar Library · Pack v1"))
+        root.addArrangedSubview(sectionTitle("Avatar Library · Pack v3"))
         packPopup.target = self
         packPopup.action = #selector(selectPack)
         root.addArrangedSubview(packPopup)
@@ -222,13 +275,27 @@ final class SettingsWindowController: NSWindowController {
         let noKey = NSTextField(labelWithString: "Without a key, no photo is uploaded. Platform-funded generation is not available yet.")
         noKey.textColor = .tertiaryLabelColor
         root.addArrangedSubview(noKey)
-        apiKeyField.placeholderString = "OpenAI API key (save an empty value to delete)"
+        providerPopup.target = self
+        providerPopup.action = #selector(selectProvider)
+        for provider in ModelProvider.allCases {
+            providerPopup.addItem(withTitle: provider.displayName)
+            providerPopup.lastItem?.representedObject = provider.rawValue
+        }
+        root.addArrangedSubview(providerPopup)
+        providerCapabilityLabel.textColor = .secondaryLabelColor
+        providerCapabilityLabel.maximumNumberOfLines = 2
+        providerCapabilityLabel.widthAnchor.constraint(equalToConstant: 550).isActive = true
+        root.addArrangedSubview(providerCapabilityLabel)
         apiKeyField.widthAnchor.constraint(equalToConstant: 420).isActive = true
         let keyRow = NSStackView(views: [apiKeyField, button("Save to Keychain", #selector(saveAPIKey))])
         keyRow.spacing = 8
         root.addArrangedSubview(keyRow)
-        modelPopup.addItems(withTitles: CertifiedModelRegistry.recommendedOpenAIModels)
         root.addArrangedSubview(modelPopup)
+        for tier in StateTier.allCases {
+            tierPopup.addItem(withTitle: "\(tier.displayName) · 8 states")
+            tierPopup.lastItem?.representedObject = tier.rawValue
+        }
+        root.addArrangedSubview(tierPopup)
         generationNameField.widthAnchor.constraint(equalToConstant: 300).isActive = true
         root.addArrangedSubview(generationNameField)
         let photoRow = NSStackView(views: [button("Choose reference photo…", #selector(choosePhoto)), photoLabel])
@@ -240,6 +307,36 @@ final class SettingsWindowController: NSWindowController {
         root.addArrangedSubview(generationButton)
         progressLabel.textColor = .secondaryLabelColor
         root.addArrangedSubview(progressLabel)
+        root.addArrangedSubview(separator())
+
+        root.addArrangedSubview(sectionTitle("Feedback & Privacy-Preserving Metrics"))
+        let feedbackButtons = NSStackView(views: [
+            configuredButton(
+                feedbackConfiguration.waitlistURL == nil ? "Waitlist not configured" : "Join waitlist",
+                #selector(openWaitlist),
+                isEnabled: feedbackConfiguration.waitlistURL != nil
+            ),
+            configuredButton(
+                feedbackConfiguration.feedbackFormURL == nil ? "Feedback form not configured" : "Feedback form",
+                #selector(openFeedbackForm),
+                isEnabled: feedbackConfiguration.feedbackFormURL != nil
+            ),
+            configuredButton(
+                feedbackConfiguration.supportEmail == nil ? "Support email not configured" : "Email support",
+                #selector(emailSupport),
+                isEnabled: feedbackConfiguration.supportEmail != nil
+            ),
+        ])
+        feedbackButtons.spacing = 8
+        root.addArrangedSubview(feedbackButtons)
+        analyticsCheckbox.target = self
+        analyticsCheckbox.action = #selector(saveAnalyticsPreference)
+        root.addArrangedSubview(analyticsCheckbox)
+        let metricsNote = NSTextField(wrappingLabelWithString: "Metrics are off by default and never include prompts, task text, tool arguments, filenames, agent IDs, API keys, or images. A global waitlist count appears only after a trusted waitlist service is configured.")
+        metricsNote.textColor = .secondaryLabelColor
+        metricsNote.maximumNumberOfLines = 3
+        metricsNote.widthAnchor.constraint(equalToConstant: 550).isActive = true
+        root.addArrangedSubview(metricsNote)
     }
 
     private func reloadValues() {
@@ -254,7 +351,11 @@ final class SettingsWindowController: NSWindowController {
         }
         privacyCheckbox.state = preferences.privacyMode ? .on : .off
         blacklistField.stringValue = preferences.keywordBlacklist.joined(separator: ", ")
-        modelPopup.selectItem(withTitle: preferences.generationModel)
+        let provider = preferences.generationProvider
+        providerPopup.selectItem(withTitle: provider.displayName)
+        reloadProviderControls(provider)
+        tierPopup.selectItem(withTitle: "\(preferences.generationTier.displayName) · 8 states")
+        analyticsCheckbox.state = preferences.analyticsOptIn ? .on : .off
     }
 
     private func updatePackStatus(_ pack: InstalledAvatarPack) {
@@ -273,6 +374,39 @@ final class SettingsWindowController: NSWindowController {
         let value = NSButton(title: title, target: self, action: action)
         value.bezelStyle = .rounded
         return value
+    }
+
+    private func configuredButton(_ title: String, _ action: Selector, isEnabled: Bool) -> NSButton {
+        let value = button(title, action)
+        value.isEnabled = isEnabled
+        return value
+    }
+
+    private func selectedProvider() -> ModelProvider {
+        guard let rawValue = providerPopup.selectedItem?.representedObject as? String,
+              let provider = ModelProvider(rawValue: rawValue) else { return .openAI }
+        return provider
+    }
+
+    private func reloadProviderControls(_ provider: ModelProvider) {
+        apiKeyField.placeholderString = "\(provider.displayName) API key (save empty to delete)"
+        modelPopup.removeAllItems()
+        modelPopup.addItems(withTitles: CertifiedModelRegistry.recommendedModels(for: provider))
+        let preferredModel = preferences.generationModel
+        if !preferredModel.isEmpty {
+            modelPopup.selectItem(withTitle: preferredModel)
+        }
+        modelPopup.isEnabled = provider.supportsReferenceImageGeneration
+        generationButton.isEnabled = provider.supportsReferenceImageGeneration
+        providerCapabilityLabel.stringValue = provider.supportsReferenceImageGeneration
+            ? "Certified reference-image generation is available for \(provider.displayName)."
+            : "Anthropic keys are supported for future orchestration, but Claude does not produce image output, so pack generation is disabled."
+    }
+
+    private func openFeedbackURL(_ url: URL?) {
+        guard let url else { return }
+        analytics.record(.feedbackOpened, tier: nil, provider: nil, outcome: "success")
+        NSWorkspace.shared.open(url)
     }
 
     private func separator() -> NSBox {

@@ -8,22 +8,22 @@ let package = Package(
         .macOS(.v14),
     ],
     products: [
-        .library(name: "AgentAvatarCore", targets: ["AgentAvatarCore"]),
-        .executable(name: "Joyride", targets: ["AgentAvatarApp"]),
-        .executable(name: "AgentAvatarCoreChecks", targets: ["AgentAvatarCoreChecks"]),
+        .library(name: "JoyrideCore", targets: ["JoyrideCore"]),
+        .executable(name: "Joyride", targets: ["JoyrideApp"]),
+        .executable(name: "JoyrideCoreChecks", targets: ["JoyrideCoreChecks"]),
     ],
     targets: [
-        .target(name: "AgentAvatarCore"),
+        .target(name: "JoyrideCore"),
         .executableTarget(
-            name: "AgentAvatarApp",
-            dependencies: ["AgentAvatarCore"],
+            name: "JoyrideApp",
+            dependencies: ["JoyrideCore"],
             linkerSettings: [
                 .linkedFramework("Security"),
             ]
         ),
         .executableTarget(
-            name: "AgentAvatarCoreChecks",
-            dependencies: ["AgentAvatarCore"]
+            name: "JoyrideCoreChecks",
+            dependencies: ["JoyrideCore"]
         ),
     ]
 )

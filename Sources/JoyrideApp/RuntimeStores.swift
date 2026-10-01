@@ -1,4 +1,5 @@
 import Foundation
+import JoyrideCore
 
 final class RuntimeConfigurationStore: @unchecked Sendable {
     private let lock = NSLock()
@@ -55,7 +56,7 @@ final class RuntimeMetricsStore: @unchecked Sendable {
         var result: [String: Any] = [
             "state": state,
             "active_count": activeCount,
-            "pack_format_version": 1,
+            "pack_format_version": AvatarPackFormat.currentVersion,
         ]
         if let lastReceivedAt { result["last_received_at"] = lastReceivedAt }
         if let lastPresentedAt { result["last_presented_at"] = lastPresentedAt }

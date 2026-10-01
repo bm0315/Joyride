@@ -47,8 +47,6 @@ public struct StateEngine: Sendable {
         switch event.kind {
         case .runStarted, .modelStarted:
             updateActivity(key: key, fallback: .thinking, date: date)
-        case .modelFinished:
-            updateActivity(key: key, fallback: .working, date: date)
         case .toolStarted:
             var activity = activities[key] ?? Activity(
                 fallbackState: .thinking,
@@ -69,31 +67,42 @@ public struct StateEngine: Sendable {
             activities[key] = activity
         case .runFinished:
             activities.removeValue(forKey: key)
-        case .idle:
-            activities = activities.filter { activityKey, _ in
-                !activityKey.hasPrefix("\(event.source):")
-            }
         }
 
         return snapshot()
     }
 
     public func snapshot() -> StateSnapshot {
-        let candidates = activities.flatMap { key, activity -> [(AvatarStateID, Date, String)] in
+        let candidates = activities.map { key, activity -> (AvatarStateID, Date, String) in
             let source = String(key.prefix { $0 != ":" })
             if activity.tools.isEmpty {
-                return [(activity.fallbackState, activity.updatedAt, source)]
+                return (activity.fallbackState, activity.updatedAt, source)
             }
-            return activity.tools.values.map { ($0.state, $0.updatedAt, source) }
+            let selected = activity.tools.values.max { left, right in
+                if left.state.priority != right.state.priority {
+                    return left.state.priority < right.state.priority
+                }
+                return left.updatedAt < right.updatedAt
+            }!
+            return (selected.state, selected.updatedAt, source)
         }
 
-        let selected = candidates.max { left, right in
+        let representatives = Dictionary(grouping: candidates, by: { $0.2 }).compactMap { source, values in
+            values.max { left, right in
+                if left.0.priority != right.0.priority {
+                    return left.0.priority < right.0.priority
+                }
+                return left.1 < right.1
+            }.map { ($0.0, $0.1, source) }
+        }
+
+        let selected = representatives.max { left, right in
             if left.0.priority != right.0.priority {
                 return left.0.priority < right.0.priority
             }
             return left.1 < right.1
         }
-        let summaries = candidates
+        let summaries = representatives
             .map { ActiveAgentSummary(source: $0.2, state: $0.0) }
             .sorted { left, right in
                 if left.state.priority != right.state.priority {
@@ -104,7 +113,7 @@ public struct StateEngine: Sendable {
         return StateSnapshot(
             state: selected?.0,
             source: selected?.2,
-            activeCount: activities.count,
+            activeCount: summaries.count,
             activeAgents: summaries
         )
     }

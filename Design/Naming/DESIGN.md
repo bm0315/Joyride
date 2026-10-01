@@ -21,11 +21,11 @@ Application Support storage remains under `Joyride`, and the bundle identifier r
 
 ## Migration policy
 
-The repository and current documentation use only canonical Joyride names. This development build does not preserve public `AgentAvatar` type aliases or environment-variable aliases because they would extend an accidental pre-release API. User-created pack data is migrated by manifest parsing and re-import, not by keeping the old wire identifier alive.
+The repository and current documentation use only canonical Joyride names. This development build does not preserve public pre-rename type aliases or environment-variable aliases because they would extend an accidental pre-release API. User-created pack data is migrated by manifest parsing and re-import, not by keeping the retired wire identifier alive.
 
 ## Acceptance criteria
 
-- Repository source and tracked artifacts contain no `AgentAvatar`, `agent-avatar`, or `AGENT_AVATAR` identifiers.
+- Repository source and tracked artifacts contain no retired pre-rename identifiers.
 - The built executable and app bundle are named Joyride.
 - Adapters and CLI emit `joyride/1`.
 - The default pack ID and format use Joyride names.

@@ -2,9 +2,26 @@ import CryptoKit
 import Foundation
 
 public enum AvatarPackFormat {
-    public static let identifier = "agent-avatar-pack"
-    public static let currentVersion = 1
-    public static let requiredStates = Set(AvatarStateID.allCases)
+    public static let identifier = "joyride-pack"
+    public static let currentVersion = 3
+}
+
+public enum ModelProvider: String, Codable, CaseIterable, Sendable {
+    case openAI = "openai"
+    case google
+    case anthropic
+
+    public var displayName: String {
+        switch self {
+        case .openAI: "OpenAI"
+        case .google: "Google"
+        case .anthropic: "Anthropic"
+        }
+    }
+
+    public var supportsReferenceImageGeneration: Bool {
+        self != .anthropic
+    }
 }
 
 public struct AvatarPackManifest: Codable, Equatable, Sendable {
@@ -48,6 +65,18 @@ public struct AvatarPackManifest: Codable, Equatable, Sendable {
         case states
     }
 
+    public func state(for requested: AvatarStateID) -> State? {
+        if let exact = states.first(where: { $0.id == requested }) {
+            return exact
+        }
+        for fallback in requested.fallbackCandidates {
+            if let matched = states.first(where: { $0.id == fallback }) {
+                return matched
+            }
+        }
+        return states.first(where: { $0.tier == requested.tier }) ?? states.first
+    }
+
     public struct Character: Codable, Equatable, Sendable {
         public let anchorImage: String
         public let anchorImageHash: String
@@ -83,6 +112,7 @@ public struct AvatarPackManifest: Codable, Equatable, Sendable {
 
     public struct State: Codable, Equatable, Sendable {
         public let id: AvatarStateID
+        public let tier: StateTier
         public let triggers: [String]
         public let priority: Int
         public let media: Media
@@ -91,6 +121,7 @@ public struct AvatarPackManifest: Codable, Equatable, Sendable {
 
         enum CodingKeys: String, CodingKey {
             case id
+            case tier
             case triggers
             case priority
             case media
@@ -100,6 +131,7 @@ public struct AvatarPackManifest: Codable, Equatable, Sendable {
 
         public init(
             id: AvatarStateID,
+            tier: StateTier,
             triggers: [String],
             priority: Int,
             media: Media,
@@ -107,6 +139,7 @@ public struct AvatarPackManifest: Codable, Equatable, Sendable {
             animation: Animation?
         ) {
             self.id = id
+            self.tier = tier
             self.triggers = triggers
             self.priority = priority
             self.media = media
@@ -163,21 +196,29 @@ public struct AvatarPackValidation: Equatable, Sendable {
 }
 
 public enum CertifiedModelRegistry {
-    public static let version = "2026-10-01"
+    public static let version = "2026-10-02"
 
-    private static let openAIModels: Set<String> = [
-        "gpt-image-2.5-sunburst",
-        "gpt-image-2.5-flare",
-        "gpt-image-2",
-        "gpt-image-2-2026-04-21",
+    private static let models: [ModelProvider: [String]] = [
+        .openAI: [
+            "gpt-image-2.5-sunburst",
+            "gpt-image-2.5-flare",
+            "gpt-image-2",
+            "gpt-image-2-2026-04-21",
+        ],
+        .google: [
+            "gemini-3.1-flash-image",
+            "gemini-3-pro-image",
+        ],
+        .anthropic: [],
     ]
 
     public static func isCertified(provider: String, model: String) -> Bool {
-        provider.lowercased() == "openai" && openAIModels.contains(model)
+        guard let provider = ModelProvider(rawValue: provider.lowercased()) else { return false }
+        return models[provider, default: []].contains(model)
     }
 
-    public static var recommendedOpenAIModels: [String] {
-        ["gpt-image-2.5-sunburst", "gpt-image-2.5-flare"]
+    public static func recommendedModels(for provider: ModelProvider) -> [String] {
+        models[provider, default: []]
     }
 }
 
@@ -187,8 +228,9 @@ public enum AvatarPackValidationError: LocalizedError, Equatable {
     case unsupportedFormat(String)
     case unsupportedVersion(Int)
     case invalidIdentifier
-    case incompleteStates
+    case emptyStates
     case duplicateState(String)
+    case tierMismatch(String)
     case invalidPriority(String)
     case unsafePath(String)
     case missingFile(String)
@@ -202,8 +244,9 @@ public enum AvatarPackValidationError: LocalizedError, Equatable {
         case let .unsupportedFormat(value): "Unsupported avatar pack format: \(value)"
         case let .unsupportedVersion(value): "Unsupported avatar pack version v\(value); this client supports v\(AvatarPackFormat.currentVersion)"
         case .invalidIdentifier: "The pack id must contain 1–80 lowercase letters, digits, dots, underscores, or hyphens"
-        case .incompleteStates: "A v1 pack must contain exactly all eight standard states"
+        case .emptyStates: "A v3 pack must declare at least one state"
         case let .duplicateState(value): "Duplicate state: \(value)"
+        case let .tierMismatch(value): "State \(value) declares the wrong tier"
         case let .invalidPriority(value): "Invalid state priority: \(value)"
         case let .unsafePath(value): "Unsafe resource path: \(value)"
         case let .missingFile(value): "Missing resource file: \(value)"
@@ -239,14 +282,13 @@ public enum AvatarPackValidator {
         guard isValidIdentifier(manifest.id) else {
             throw AvatarPackValidationError.invalidIdentifier
         }
+        guard !manifest.states.isEmpty else {
+            throw AvatarPackValidationError.emptyStates
+        }
 
         let stateIDs = manifest.states.map(\.id)
-        guard Set(stateIDs) == AvatarPackFormat.requiredStates,
-              stateIDs.count == AvatarPackFormat.requiredStates.count else {
-            if let duplicate = Dictionary(grouping: stateIDs, by: { $0 }).first(where: { $0.value.count > 1 })?.key {
-                throw AvatarPackValidationError.duplicateState(duplicate.rawValue)
-            }
-            throw AvatarPackValidationError.incompleteStates
+        if let duplicate = Dictionary(grouping: stateIDs, by: { $0 }).first(where: { $0.value.count > 1 })?.key {
+            throw AvatarPackValidationError.duplicateState(duplicate.rawValue)
         }
 
         let anchorURL = try resolvedResource(manifest.character.anchorImage, in: directory)
@@ -259,6 +301,9 @@ public enum AvatarPackValidator {
         }
 
         for state in manifest.states {
+            guard state.tier == state.id.tier else {
+                throw AvatarPackValidationError.tierMismatch(state.id.rawValue)
+            }
             guard state.priority >= 0 && state.priority <= 100 else {
                 throw AvatarPackValidationError.invalidPriority(state.id.rawValue)
             }

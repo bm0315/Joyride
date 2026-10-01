@@ -1,4 +1,4 @@
-import AgentAvatarCore
+import JoyrideCore
 import Foundation
 
 @MainActor
@@ -6,7 +6,6 @@ final class AvatarStateCoordinator {
     typealias PresentationHandler = (AvatarStateID, String, Int, [ActiveAgentSummary], Date) -> Void
 
     private let minimumDwell: TimeInterval = 5
-    private let leisureStates: [AvatarStateID] = [.resting, .staringAtOwner, .daydreamingHearts]
     private let onPresentation: PresentationHandler
     private var engine = StateEngine()
     private var currentState: AvatarStateID = .resting
@@ -15,12 +14,12 @@ final class AvatarStateCoordinator {
     private var currentAgents: [ActiveAgentSummary] = []
     private var privacyMode = false
     private var lastTransition = Date.distantPast
-    private var nextLeisureTransition = Date()
+    private var idleBeganAt: Date?
+    private var attentionOverrideUntil: Date?
     private var timer: Timer?
 
     init(onPresentation: @escaping PresentationHandler) {
         self.onPresentation = onPresentation
-        scheduleNextLeisureTransition(after: Date())
         timer = Timer.scheduledTimer(withTimeInterval: 0.5, repeats: true) { [weak self] _ in
             MainActor.assumeIsolated {
                 self?.reconcile(at: Date())
@@ -47,38 +46,52 @@ final class AvatarStateCoordinator {
         reconcile(at: Date())
     }
 
+    func prepareForNotification(at date: Date) {
+        attentionOverrideUntil = date.addingTimeInterval(8)
+        reconcile(at: date)
+    }
+
     private func reconcile(at date: Date) {
         let snapshot = engine.snapshot()
         if let desired = snapshot.state {
+            idleBeganAt = nil
+            attentionOverrideUntil = nil
             let source = snapshot.source.map(sourceDisplayName) ?? "Agent"
             let visibleState: AvatarStateID = privacyMode ? .working : desired
+            let visibleAgents = privacyMode
+                ? snapshot.activeAgents.map { ActiveAgentSummary(source: $0.source, state: .working) }
+                : snapshot.activeAgents
             transition(
                 to: visibleState,
                 source: privacyMode ? "Private mode" : source,
                 additionalCount: max(0, snapshot.activeCount - 1),
-                agents: snapshot.activeAgents,
+                agents: visibleAgents,
                 at: date,
                 force: privacyMode || shouldPreempt(with: visibleState)
             )
             return
         }
 
-        if currentState.isWorkState {
-            transition(to: .resting, source: "Idle", additionalCount: 0, agents: [], at: date, force: false)
-            return
+        if idleBeganAt == nil {
+            idleBeganAt = date
         }
-
-        guard date >= nextLeisureTransition else { return }
-        let choices = leisureStates.filter { $0 != currentState }
+        let idleDuration = date.timeIntervalSince(idleBeganAt ?? date)
+        let hour = Calendar.current.component(.hour, from: date)
+        let desired: AvatarStateID
+        if let overrideUntil = attentionOverrideUntil, date < overrideUntil {
+            desired = .staringAtOwner
+        } else {
+            attentionOverrideUntil = nil
+            desired = IdleStatePolicy.state(idleDuration: idleDuration, localHour: hour)
+        }
         transition(
-            to: choices.randomElement() ?? .resting,
+            to: desired,
             source: "Idle",
             additionalCount: 0,
             agents: [],
             at: date,
-            force: true
+            force: currentState.isWorkState || attentionOverrideUntil != nil
         )
-        scheduleNextLeisureTransition(after: date)
     }
 
     private func shouldPreempt(with desired: AvatarStateID) -> Bool {
@@ -109,14 +122,7 @@ final class AvatarStateCoordinator {
         currentAdditionalCount = additionalCount
         currentAgents = agents
         lastTransition = date
-        if !state.isWorkState {
-            scheduleNextLeisureTransition(after: date)
-        }
         onPresentation(state, source, additionalCount, agents, date)
-    }
-
-    private func scheduleNextLeisureTransition(after date: Date) {
-        nextLeisureTransition = date.addingTimeInterval(Double.random(in: 20...38))
     }
 
     private func sourceDisplayName(_ value: String) -> String {

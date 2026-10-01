@@ -25,7 +25,7 @@ select_sdk() {
   default_sdk="$(xcrun --sdk macosx --show-sdk-path)"
   architecture="$(uname -m)"
   for candidate in \
-    "${AGENT_AVATAR_SDK:-}" \
+    "${JOYRIDE_SDK:-}" \
     "$default_sdk" \
     /Library/Developer/CommandLineTools/SDKs/MacOSX*.sdk
   do

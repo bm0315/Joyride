@@ -1,4 +1,4 @@
-import AgentAvatarCore
+import JoyrideCore
 import Foundation
 @preconcurrency import Network
 
@@ -16,7 +16,7 @@ final class LocalHTTPServer: @unchecked Sendable {
     typealias EventHandler = @Sendable (AgentEvent, Date) -> Void
     typealias StatusHandler = @Sendable (String) -> Void
 
-    private let queue = DispatchQueue(label: "app.agent-avatar.http", qos: .userInitiated)
+    private let queue = DispatchQueue(label: "app.joyride.http", qos: .userInitiated)
     private let decoder = JSONDecoder()
     private let eventHandler: EventHandler
     private let statusHandler: StatusHandler

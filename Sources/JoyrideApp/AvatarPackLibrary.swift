@@ -1,4 +1,4 @@
-import AgentAvatarCore
+import JoyrideCore
 import Foundation
 
 struct InstalledAvatarPack: Equatable, Sendable {
@@ -10,7 +10,7 @@ struct InstalledAvatarPack: Equatable, Sendable {
     var isCertified: Bool { validation.isCertified }
 
     func state(_ id: AvatarStateID) -> AvatarPackManifest.State? {
-        validation.manifest.states.first { $0.id == id }
+        validation.manifest.state(for: id)
     }
 }
 
@@ -66,6 +66,14 @@ final class AvatarPackLibrary {
     func installBundledPackIfNeeded(from directory: URL) throws {
         let validation = try AvatarPackValidator.validate(directory: directory)
         let destination = rootDirectory.appendingPathComponent(validation.manifest.id, isDirectory: true)
+        if fileManager.fileExists(atPath: destination.path),
+           (try? AvatarPackValidator.validate(directory: destination)) == nil {
+            let backup = rootDirectory.appendingPathComponent(
+                ".legacy-\(validation.manifest.id)-\(UUID().uuidString)",
+                isDirectory: true
+            )
+            try fileManager.moveItem(at: destination, to: backup)
+        }
         if !fileManager.fileExists(atPath: destination.path) {
             try fileManager.copyItem(at: directory, to: destination)
         }
@@ -83,7 +91,7 @@ final class AvatarPackLibrary {
         }
 
         let staging = fileManager.temporaryDirectory
-            .appendingPathComponent("agent-avatar-import-\(UUID().uuidString)", isDirectory: true)
+            .appendingPathComponent("joyride-import-\(UUID().uuidString)", isDirectory: true)
         try fileManager.createDirectory(at: staging, withIntermediateDirectories: true)
         defer { try? fileManager.removeItem(at: staging) }
 

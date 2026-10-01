@@ -39,7 +39,7 @@ def _validated_endpoint(raw_value: str) -> str:
         or parsed.query
         or parsed.fragment
     ):
-        raise ValueError("AGENT_AVATAR_ENDPOINT must be a loopback HTTP /v1/events URL")
+        raise ValueError("JOYRIDE_ENDPOINT must be a loopback HTTP /v1/events URL")
     return raw_value
 
 
@@ -61,8 +61,22 @@ def _infer_state(tool_name: str, args: object) -> str:
 
     if _contains_any(value, FLIGHT_KEYWORDS):
         return "checking_flights"
+    if _contains_any(value, HOTEL_KEYWORDS):
+        return "booking_hotel"
+    if _contains_any(value, TRAVEL_KEYWORDS):
+        return "travel"
+    if _contains_any(value, CALENDAR_KEYWORDS):
+        return "calendar"
     if _contains_any(value, SHOPPING_KEYWORDS):
         return "shopping"
+    if _contains_any(value, FOOD_KEYWORDS):
+        return "food_ordering"
+    if _contains_any(value, MEETING_KEYWORDS):
+        return "meeting"
+    if _contains_any(value, CODE_KEYWORDS):
+        return "coding"
+    if _contains_any(value, FILE_KEYWORDS):
+        return "finding_files"
     if _contains_any(value, RESEARCH_KEYWORDS):
         return "researching"
     return "working"
@@ -84,6 +98,13 @@ SHOPPING_KEYWORDS = (
     "shopping", "shop", "cart", "checkout", "purchase", "amazon", "taobao", "tmall",
     "jd.com", "pinduoduo", "购物", "商品", "下单", "比价",
 )
+HOTEL_KEYWORDS = ("hotel", "lodging", "booking.com", "airbnb", "酒店", "住宿")
+TRAVEL_KEYWORDS = ("itinerary", "travel", "trip_plan", "maps", "行程", "旅行", "攻略")
+CALENDAR_KEYWORDS = ("calendar", "schedule", "event.create", "日历", "日程")
+FOOD_KEYWORDS = ("restaurant", "food", "meal", "delivery", "外卖", "点餐", "餐厅")
+MEETING_KEYWORDS = ("meeting", "zoom", "teams", "email", "mail", "会议", "邮件")
+CODE_KEYWORDS = ("terminal", "shell", "exec", "command", "code", "compile", "build", "test", "git")
+FILE_KEYWORDS = ("file", "folder", "filesystem", "read_file", "write_file", "glob", "find", "文件", "目录")
 RESEARCH_KEYWORDS = (
     "browser", "browse", "search", "research", "web", "fetch", "crawl", "scrape",
     "read_url", "perplexity", "google", "bing", "搜索", "查找", "资料", "网页",
@@ -100,7 +121,7 @@ class EventPoster:
         self._config_expires_at = 0.0
         self._worker = threading.Thread(
             target=self._run,
-            name="agent-avatar-events",
+            name="joyride-events",
             daemon=True,
         )
         self._worker.start()
@@ -176,31 +197,49 @@ def _string_value(values: Mapping[str, object], *keys: str) -> str:
 
 
 def register(ctx: PluginContext) -> None:
-    endpoint = _validated_endpoint(os.environ.get("AGENT_AVATAR_ENDPOINT", DEFAULT_ENDPOINT))
+    endpoint = _validated_endpoint(os.environ.get("JOYRIDE_ENDPOINT", DEFAULT_ENDPOINT))
     poster = EventPoster(endpoint)
+    active_runs: set[str] = set()
+    active_runs_lock = threading.Lock()
+
+    def activity_id(kwargs: Mapping[str, object]) -> str:
+        return _opaque_id(
+            _string_value(kwargs, "session_id", "task_id", "turn_id"),
+            "hermes-run",
+        )
+
+    def ensure_run_started(run_id: str) -> None:
+        with active_runs_lock:
+            if run_id in active_runs:
+                return
+            active_runs.add(run_id)
+            poster.submit({
+                "protocol": "joyride/1",
+                "source": "hermes",
+                "kind": "run_started",
+                "activity_id": run_id,
+            }, "")
 
     def model_started(**kwargs: object) -> None:
+        run_id = activity_id(kwargs)
+        ensure_run_started(run_id)
         poster.submit({
-            "protocol": "agent-avatar/1",
+            "protocol": "joyride/1",
             "source": "hermes",
             "kind": "model_started",
-            "activity_id": _opaque_id(
-                _string_value(kwargs, "session_id", "task_id", "turn_id"),
-                "hermes-run",
-            ),
+            "activity_id": run_id,
         }, "")
 
     def tool_started(**kwargs: object) -> None:
         tool_name = _string_value(kwargs, "tool_name") or "unknown"
         args = kwargs.get("args", {})
+        run_id = activity_id(kwargs)
+        ensure_run_started(run_id)
         poster.submit({
-            "protocol": "agent-avatar/1",
+            "protocol": "joyride/1",
             "source": "hermes",
             "kind": "tool_started",
-            "activity_id": _opaque_id(
-                _string_value(kwargs, "session_id", "task_id", "turn_id"),
-                "hermes-run",
-            ),
+            "activity_id": run_id,
             "operation_id": _opaque_id(
                 _string_value(kwargs, "tool_call_id"),
                 tool_name,
@@ -211,14 +250,13 @@ def register(ctx: PluginContext) -> None:
 
     def tool_finished(**kwargs: object) -> None:
         tool_name = _string_value(kwargs, "tool_name") or "unknown"
+        run_id = activity_id(kwargs)
+        ensure_run_started(run_id)
         poster.submit({
-            "protocol": "agent-avatar/1",
+            "protocol": "joyride/1",
             "source": "hermes",
             "kind": "tool_finished",
-            "activity_id": _opaque_id(
-                _string_value(kwargs, "session_id", "task_id", "turn_id"),
-                "hermes-run",
-            ),
+            "activity_id": run_id,
             "operation_id": _opaque_id(
                 _string_value(kwargs, "tool_call_id"),
                 tool_name,
@@ -227,15 +265,16 @@ def register(ctx: PluginContext) -> None:
         }, "")
 
     def run_finished(**kwargs: object) -> None:
+        run_id = activity_id(kwargs)
+        ensure_run_started(run_id)
         poster.submit({
-            "protocol": "agent-avatar/1",
+            "protocol": "joyride/1",
             "source": "hermes",
             "kind": "run_finished",
-            "activity_id": _opaque_id(
-                _string_value(kwargs, "session_id", "task_id", "turn_id"),
-                "hermes-run",
-            ),
+            "activity_id": run_id,
         }, "")
+        with active_runs_lock:
+            active_runs.discard(run_id)
 
     ctx.register_hook("pre_llm_call", model_started)
     ctx.register_hook("pre_tool_call", tool_started)

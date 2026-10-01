@@ -1,4 +1,4 @@
-import AgentAvatarCore
+import JoyrideCore
 import Foundation
 
 private enum CheckFailure: LocalizedError {
@@ -24,7 +24,7 @@ private func event(
     stateHint: AvatarStateID?
 ) -> AgentEvent {
     AgentEvent(
-        protocolVersion: "agent-avatar/1",
+        protocolVersion: "joyride/1",
         source: source,
         kind: kind,
         activityID: activityID,
@@ -39,9 +39,10 @@ enum CoreChecks {
     static func main() throws {
         try lifecycleCheck()
         try concurrentPriorityCheck()
-        try sourceIdleCheck()
+        try sameSourceAggregationCheck()
         try validationCheck()
         try classifierCheck()
+        try idlePolicyCheck()
         try avatarPackCheck()
         print("Joyride core checks passed")
     }
@@ -84,23 +85,20 @@ enum CoreChecks {
         try check(snapshot.activeAgents.count == 2, "concurrent activities should be listed")
     }
 
-    private static func sourceIdleCheck() throws {
+    private static func sameSourceAggregationCheck() throws {
         var engine = StateEngine()
         let now = Date(timeIntervalSince1970: 100)
         _ = engine.apply(
-            event(source: "openclaw", kind: .runStarted, activityID: "run-1", operationID: nil, tool: nil, stateHint: nil),
+            event(source: "openclaw", kind: .toolStarted, activityID: "run-1", operationID: "tool-1", tool: "terminal", stateHint: nil),
             at: now
         )
-        _ = engine.apply(
-            event(source: "hermes", kind: .runStarted, activityID: "run-2", operationID: nil, tool: nil, stateHint: nil),
+        let snapshot = engine.apply(
+            event(source: "openclaw", kind: .toolStarted, activityID: "run-2", operationID: "tool-2", tool: "browser", stateHint: nil),
             at: now.addingTimeInterval(1)
         )
-        let snapshot = engine.apply(
-            event(source: "openclaw", kind: .idle, activityID: nil, operationID: nil, tool: nil, stateHint: nil),
-            at: now.addingTimeInterval(2)
-        )
-        try check(snapshot.state == .thinking, "idling one source must keep other sources active")
-        try check(snapshot.source == "hermes", "remaining source should be Hermes")
+        try check(snapshot.activeCount == 1, "one source with multiple activities must count as one agent")
+        try check(snapshot.activeAgents.count == 1, "one source must produce one expanded-list row")
+        try check(snapshot.state == .researching, "the source representative should use its highest-priority state")
     }
 
     private static func validationCheck() throws {
@@ -115,7 +113,7 @@ enum CoreChecks {
         _ = try valid.validated()
 
         let invalid = AgentEvent(
-            protocolVersion: "agent-avatar/2",
+            protocolVersion: "joyride/2",
             source: "test",
             kind: .runStarted,
             activityID: nil,
@@ -135,12 +133,22 @@ enum CoreChecks {
         try check(ToolClassifier.classify(toolName: "search_flights") == .checkingFlights, "flight classification failed")
         try check(ToolClassifier.classify(toolName: "shopping_cart") == .shopping, "shopping classification failed")
         try check(ToolClassifier.classify(toolName: "browser.search") == .researching, "research classification failed")
-        try check(ToolClassifier.classify(toolName: "terminal") == .working, "working classification failed")
+        try check(ToolClassifier.classify(toolName: "terminal") == .coding, "coding classification failed")
+        try check(ToolClassifier.classify(toolName: "read_file") == .findingFiles, "file classification failed")
+        try check(ToolClassifier.classify(toolName: "calendar.create") == .calendar, "calendar classification failed")
+    }
+
+    private static func idlePolicyCheck() throws {
+        try check(IdleStatePolicy.state(idleDuration: 10, localHour: 12) == .resting, "idle cooldown failed")
+        try check(IdleStatePolicy.state(idleDuration: 60, localHour: 12) == .idle, "neutral idle failed")
+        try check(IdleStatePolicy.state(idleDuration: 180, localHour: 12) == .staringAtOwner, "attention interval failed")
+        try check(IdleStatePolicy.state(idleDuration: 600, localHour: 12) == .daydreamingHearts, "long idle failed")
+        try check(IdleStatePolicy.state(idleDuration: 180, localHour: 1) == .dreaming, "late-night dreaming failed")
     }
 
     private static func avatarPackCheck() throws {
         let root = FileManager.default.temporaryDirectory
-            .appendingPathComponent("agent-avatar-core-check-\(UUID().uuidString)", isDirectory: true)
+            .appendingPathComponent("joyride-core-check-\(UUID().uuidString)", isDirectory: true)
         let images = root.appendingPathComponent("images", isDirectory: true)
         try FileManager.default.createDirectory(at: images, withIntermediateDirectories: true)
         defer { try? FileManager.default.removeItem(at: root) }
@@ -153,6 +161,7 @@ enum CoreChecks {
             try Data(state.rawValue.utf8).write(to: root.appendingPathComponent(path))
             states.append(AvatarPackManifest.State(
                 id: state,
+                tier: state.tier,
                 triggers: ["test"],
                 priority: state.priority,
                 media: AvatarPackManifest.Media(path: path, type: .image),
@@ -166,7 +175,7 @@ enum CoreChecks {
         }
         let manifest = AvatarPackManifest(
             format: AvatarPackFormat.identifier,
-            formatVersion: 1,
+            formatVersion: AvatarPackFormat.currentVersion,
             id: "test.pack",
             name: "Test",
             version: "1.0.0",
@@ -183,6 +192,7 @@ enum CoreChecks {
         try encoder.encode(manifest).write(to: root.appendingPathComponent("manifest.json"))
         let validation = try AvatarPackValidator.validate(directory: root)
         try check(validation.isCertified, "whitelisted reference-image model should be certified")
-        try check(validation.manifest.states.count == 8, "pack should contain all eight states")
+        try check(validation.manifest.states.count == 24, "pack should contain the complete state matrix")
+        try check(validation.manifest.state(for: .goodnight) != nil, "pack should resolve every state")
     }
 }

@@ -1,4 +1,4 @@
-import AgentAvatarCore
+import JoyrideCore
 import AppKit
 
 @MainActor
@@ -9,6 +9,12 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     private var server: LocalHTTPServer?
     private var library: AvatarPackLibrary?
     private let preferences = AppPreferences()
+    private let feedbackConfiguration = FeedbackConfiguration.bundled(bundle: .main)
+    private lazy var analytics = ProductAnalyticsStore(
+        preferences: preferences,
+        configuration: feedbackConfiguration,
+        defaults: .standard
+    )
     private lazy var configurationStore = RuntimeConfigurationStore(preferences.privacyConfiguration)
     private let metricsStore = RuntimeMetricsStore()
     private var statusItem: NSStatusItem?
@@ -18,9 +24,11 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     private var visibilityMenuItem: NSMenuItem?
     private var alwaysOnTopMenuItem: NSMenuItem?
     private var clickThroughMenuItem: NSMenuItem?
+    private var connectedSources: Set<String> = []
 
     func applicationDidFinishLaunching(_ notification: Notification) {
         NSApp.setActivationPolicy(.accessory)
+        analytics.record(.appOpened, tier: nil, provider: nil, outcome: "success")
         do {
             let library = try AvatarPackLibrary()
             guard let bundled = findBundledPackDirectory() else {
@@ -57,6 +65,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
                 )
                 self?.stateMenuItem?.title = "\(state.displayName) · \(source)\(additionalCount > 0 ? " · +\(additionalCount)" : "")"
                 self?.metricsStore.stateSelected(state.rawValue, activeCount: additionalCount + (agents.isEmpty ? 0 : 1))
+                self?.analytics.record(.statePresented, tier: state.tier, provider: nil, outcome: nil)
             }
             coordinator?.setPrivacyMode(preferences.privacyMode)
             coordinator?.start()
@@ -65,6 +74,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             settingsController = SettingsWindowController(
                 library: library,
                 preferences: preferences,
+                feedbackConfiguration: feedbackConfiguration,
+                analytics: analytics,
                 onPackSelected: { [weak self] pack in
                     self?.windowController?.setPack(pack)
                     self?.updatePackMenu(pack)
@@ -152,6 +163,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         let server = LocalHTTPServer(
             eventHandler: { [weak self] event, receivedAt in
                 Task { @MainActor in
+                    if self?.connectedSources.insert(event.source).inserted == true {
+                        self?.analytics.record(.agentConnected, tier: nil, provider: nil, outcome: "success")
+                    }
                     self?.coordinator?.receive(event, at: receivedAt)
                 }
             },
@@ -220,7 +234,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         menu.addItem(clickThroughItem)
         clickThroughMenuItem = clickThroughItem
 
-        let previewItem = NSMenuItem(title: "Preview all 8 states", action: nil, keyEquivalent: "")
+        let previewItem = NSMenuItem(title: "Preview all 24 states", action: nil, keyEquivalent: "")
         let previewMenu = NSMenu()
         for state in AvatarStateID.allCases {
             let item = NSMenuItem(title: state.displayName, action: #selector(previewState(_:)), keyEquivalent: "")
@@ -258,13 +272,13 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     }
 
     private func configuredPort() -> UInt16 {
-        guard let rawValue = ProcessInfo.processInfo.environment["AGENT_AVATAR_PORT"],
+        guard let rawValue = ProcessInfo.processInfo.environment["JOYRIDE_PORT"],
               let port = UInt16(rawValue), port > 0 else { return 8_765 }
         return port
     }
 
     private func findBundledPackDirectory() -> URL? {
-        if let configured = ProcessInfo.processInfo.environment["AGENT_AVATAR_PACK"] {
+        if let configured = ProcessInfo.processInfo.environment["JOYRIDE_PACK"] {
             let url = URL(fileURLWithPath: configured, isDirectory: true)
             if FileManager.default.fileExists(atPath: url.appendingPathComponent("manifest.json").path) {
                 return url

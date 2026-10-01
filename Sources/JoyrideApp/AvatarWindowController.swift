@@ -1,4 +1,4 @@
-import AgentAvatarCore
+import JoyrideCore
 import AppKit
 import WebKit
 

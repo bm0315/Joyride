@@ -12,18 +12,35 @@ import urllib.request
 EVENT_KINDS = (
     "run_started",
     "model_started",
-    "model_finished",
     "tool_started",
     "tool_finished",
     "run_finished",
-    "idle",
 )
 STATE_HINTS = (
     "working",
-    "checking_flights",
-    "shopping",
     "thinking",
     "researching",
+    "coding",
+    "finding_files",
+    "waiting",
+    "greeting",
+    "idle",
+    "checking_flights",
+    "booking_hotel",
+    "travel",
+    "calendar",
+    "shopping",
+    "unboxing",
+    "meeting",
+    "food_ordering",
+    "staring_at_owner",
+    "daydreaming_hearts",
+    "resting",
+    "dreaming",
+    "grooming",
+    "celebrating",
+    "missing_you",
+    "goodnight",
 )
 
 
@@ -41,7 +58,7 @@ def parse_arguments() -> argparse.Namespace:
 
 def build_event(arguments: argparse.Namespace) -> dict[str, str]:
     event = {
-        "protocol": "agent-avatar/1",
+        "protocol": "joyride/1",
         "source": arguments.source,
         "kind": arguments.kind,
     }

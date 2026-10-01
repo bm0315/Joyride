@@ -8,9 +8,9 @@ matching scene from a replaceable avatar pack. When work stops, the character re
 back at its owner.
 
 <p align="center">
-  <img src="Assets/previews/working-typing-v2.gif" width="31%" alt="Joyride agent typing on a keyboard">
-  <img src="Assets/previews/researching-files-v2.gif" width="31%" alt="Joyride agent switching between research files">
-  <img src="Assets/previews/daydreaming-heart-burst-v2.gif" width="31%" alt="Joyride agent surrounded by outward-floating hearts">
+  <img src="Assets/previews/working-typing-v3.gif" width="31%" alt="Joyride agent typing on a keyboard">
+  <img src="Assets/previews/researching-files-v3.gif" width="31%" alt="Joyride agent switching between research files">
+  <img src="Assets/previews/daydreaming-heart-burst-v3.gif" width="31%" alt="Joyride agent surrounded by outward-floating hearts">
 </p>
 
 > Joyride is an independent, unofficial enhancement companion. It is not affiliated with or endorsed by

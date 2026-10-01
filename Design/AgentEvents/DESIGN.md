@@ -1,0 +1,34 @@
+# Agent Event Contract Design
+
+## Goal
+
+Keep the event protocol limited to lifecycle signals that adapters can emit consistently, and guarantee that a run begins before its model and tool activity.
+
+## Event kinds
+
+The v1 Joyride event contract contains:
+
+- `run_started`
+- `model_started`
+- `tool_started`
+- `tool_finished`
+- `run_finished`
+
+`model_finished` is removed because the current adapter APIs do not expose it consistently and it is not needed to close tool activity. `idle` is removed because idle is derived locally after all active runs finish; an external synthetic idle event would compete with the player policy.
+
+## Adapter sequencing
+
+Each adapter tracks active run IDs in process memory. On the first model callback for a run it emits `run_started`, then `model_started`, in that order. Further model callbacks emit only `model_started`. A terminal callback emits `run_finished` and removes the run from the active set.
+
+If a tool callback arrives before a model callback, the adapter emits `run_started` before the tool event. This makes the contract robust to provider hook ordering.
+
+## Privacy
+
+Run and agent IDs are hashed in the agent process before transmission. Tool names may be classified locally, but arguments, outputs, prompts, and task text never enter the event payload.
+
+## Acceptance criteria
+
+- Every adapter emits one `run_started` before any event in a run.
+- Every completed run emits `run_finished` and clears adapter state.
+- The protocol schema and manifest triggers contain no `model_finished` or `idle` event kinds.
+- Adapter tests cover first-event ordering, repeated model calls, tool-first ordering, and completion.

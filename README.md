@@ -29,7 +29,7 @@ back at its owner.
   blacklist is evaluated inside the agent process, so matched task text never reaches Joyride.
 - **Multi-agent arbitration.** One winner is visible; a `+N` badge expands to show the other active agents.
 - **Resident-app safeguards.** Current-pack image preloading, paused animation while hidden or occluded,
-  an explicit click-through recovery path, and strict pack-version rejection.
+  a visible hide control, an explicit click-through recovery path, and strict pack-version rejection.
 - **Future-ready media.** Static images, animated images, and short video are represented in v1; static
   art receives a lightweight programmatic motion fallback.
 

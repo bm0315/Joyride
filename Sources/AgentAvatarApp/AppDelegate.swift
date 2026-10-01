@@ -35,9 +35,15 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             self.library = library
             configureStatusMenu()
 
-            let windowController = AvatarWindowController(pack: selectedPack) { [metricsStore] receivedAt in
-                metricsStore.rendered(receivedAt: receivedAt, presentedAt: Date())
-            }
+            let windowController = AvatarWindowController(
+                pack: selectedPack,
+                onRendered: { [metricsStore] receivedAt in
+                    metricsStore.rendered(receivedAt: receivedAt, presentedAt: Date())
+                },
+                onHideRequested: { [weak self] in
+                    self?.hideAvatar()
+                }
+            )
             self.windowController = windowController
             updatePackMenu(selectedPack)
 
@@ -92,14 +98,18 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     @objc private func toggleVisibility() {
         guard let window = windowController?.window else { return }
         if window.isVisible {
-            window.orderOut(nil)
-            windowController?.setPlaybackEnabled(false)
-            visibilityMenuItem?.title = "Show avatar"
+            hideAvatar()
         } else {
             windowController?.showWindow(nil)
             windowController?.setPlaybackEnabled(true)
             visibilityMenuItem?.title = "Hide avatar"
         }
+    }
+
+    private func hideAvatar() {
+        windowController?.window?.orderOut(nil)
+        windowController?.setPlaybackEnabled(false)
+        visibilityMenuItem?.title = "Show avatar"
     }
 
     @objc private func dockBottomRight() {

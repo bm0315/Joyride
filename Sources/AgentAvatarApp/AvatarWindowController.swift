@@ -7,6 +7,7 @@ final class AvatarWindowController: NSWindowController, WKNavigationDelegate, WK
     private let webView: WKWebView
     private let schemeHandler: AvatarPackSchemeHandler
     private let onRendered: (TimeInterval) -> Void
+    private let onHideRequested: () -> Void
     private var scriptMessageHandler: WeakScriptMessageHandler?
     private var pack: InstalledAvatarPack
     private var isPageReady = false
@@ -20,9 +21,14 @@ final class AvatarWindowController: NSWindowController, WKNavigationDelegate, WK
         let receivedAt: Date
     }
 
-    init(pack: InstalledAvatarPack, onRendered: @escaping (TimeInterval) -> Void) {
+    init(
+        pack: InstalledAvatarPack,
+        onRendered: @escaping (TimeInterval) -> Void,
+        onHideRequested: @escaping () -> Void
+    ) {
         self.pack = pack
         self.onRendered = onRendered
+        self.onHideRequested = onHideRequested
         let configuration = WKWebViewConfiguration()
         configuration.defaultWebpagePreferences.allowsContentJavaScript = true
         configuration.websiteDataStore = .nonPersistent()
@@ -116,6 +122,10 @@ final class AvatarWindowController: NSWindowController, WKNavigationDelegate, WK
         guard let action = message.body as? String else { return }
         if action == "drag", let event = NSApp.currentEvent {
             window?.performDrag(with: event)
+            return
+        }
+        if action == "hide" {
+            onHideRequested()
             return
         }
         if action.hasPrefix("rendered:") {
@@ -214,6 +224,8 @@ final class AvatarWindowController: NSWindowController, WKNavigationDelegate, WK
         #badge { display: none; border: 0; border-radius: 999px; padding: 2px 7px; color: white; background: #635bff; font: 700 11px -apple-system; cursor: pointer; }
         #details { display: none; position: absolute; right: 14px; bottom: 54px; min-width: 170px; max-width: calc(100% - 28px); padding: 10px; border-radius: 14px; color: white; background: rgba(20,20,23,.88); border: 1px solid rgba(255,255,255,.18); backdrop-filter: blur(18px); font-size: 12px; }
         #details.visible { display: block; }
+        #close { position: absolute; top: 12px; right: 12px; width: 28px; height: 28px; padding: 0; border: 1px solid rgba(255,255,255,.24); border-radius: 50%; color: white; background: rgba(20,20,23,.56); backdrop-filter: blur(12px); font: 500 20px/25px -apple-system, sans-serif; cursor: pointer; opacity: .78; }
+        #close:hover { opacity: 1; background: rgba(20,20,23,.82); }
         .agent { display: flex; justify-content: space-between; gap: 14px; padding: 4px 2px; }
         .agent-state { opacity: .7; }
         #frame[data-work="false"] #avatar, #frame[data-work="false"] #video { animation-duration: 8s; }
@@ -231,6 +243,7 @@ final class AvatarWindowController: NSWindowController, WKNavigationDelegate, WK
         <img id="avatar" alt="Joyride Agent">
         <video id="video" muted loop playsinline></video>
         <div id="shade"></div>
+        <button id="close" type="button" aria-label="Hide Joyride" title="Hide Joyride — reopen from the menu bar">×</button>
         <div id="details"></div>
         <div id="status"><span id="dot"></span><span id="label">Resting</span><span id="source">· Idle</span><button id="badge"></button></div>
       </div>
@@ -240,6 +253,7 @@ final class AvatarWindowController: NSWindowController, WKNavigationDelegate, WK
         const video = document.getElementById('video');
         const backdrop = document.getElementById('backdrop');
         const badge = document.getElementById('badge');
+        const closeButton = document.getElementById('close');
         const details = document.getElementById('details');
         let preloaded = [];
         function preloadAssets(paths) { preloaded = paths.map(path => { const image = new Image(); image.src = encodeURI(path); return image; }); }
@@ -271,9 +285,10 @@ final class AvatarWindowController: NSWindowController, WKNavigationDelegate, WK
           if (enabled && video.src) video.play().catch(() => {}); else video.pause();
         }
         badge.addEventListener('click', event => { event.stopPropagation(); details.classList.toggle('visible'); });
+        closeButton.addEventListener('click', event => { event.stopPropagation(); window.webkit.messageHandlers.avatarHost.postMessage('hide'); });
         details.addEventListener('mousedown', event => event.stopPropagation());
         frame.addEventListener('mousedown', event => {
-          if (event.target !== badge && !details.contains(event.target)) window.webkit.messageHandlers.avatarHost.postMessage('drag');
+          if (event.target !== badge && event.target !== closeButton && !details.contains(event.target)) window.webkit.messageHandlers.avatarHost.postMessage('drag');
         });
       </script>
     </body>

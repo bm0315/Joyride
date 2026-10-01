@@ -36,6 +36,50 @@ back at its owner.
 See [PROTOCOL.md](PROTOCOL.md) for the complete pack format, event contract, certification rules, and
 privacy model.
 
+## State Matrix roadmap
+
+If more than 100 people are interested in Joyride, we will add a full **State Matrix** feature.
+
+### Basic scenes
+
+1. `working` — Typing at a computer while wearing headphones. Trigger: a tool call is running.
+2. `thinking` — Resting their chin on one hand, with a question mark or light bulb. Trigger: planning or
+   reasoning with no active tool call.
+3. `researching` — Reviewing documents with a magnifying glass. Trigger: searching the web or reading a
+   webpage.
+4. `coding` — Working in a terminal or code editor. Trigger: shell commands or coding-related tool calls.
+5. `finding_files` — Searching through folders. Trigger: file reading, writing, or search tools.
+6. `waiting` — Checking a watch or watching a spinner. Trigger: waiting for a subagent or long-running task.
+7. `greeting` — Waving hello. Trigger: a new session begins.
+8. `idle` — Neutral daydreaming. Trigger: no active task.
+
+### Extended scenes
+
+9. `checking_flights` — Viewing a flight information panel. Trigger: flight searches or ticket booking.
+10. `booking_hotel` — Browsing hotel cards. Trigger: hotel searches or reservations.
+11. `travel` — Planning with a map and itinerary. Trigger: travel research or itinerary planning.
+12. `calendar` — Updating a calendar. Trigger: calendar reading or writing.
+13. `shopping` — Holding shopping bags. Trigger: price comparisons or adding items to a cart.
+14. `unboxing` — Opening a package or mystery box. Trigger: a successful purchase or delivery tracking.
+15. `meeting` — Appearing in a video meeting. Trigger: meeting- or email-related tasks.
+16. `food_ordering` — Browsing food or holding a delivery bag. Trigger: restaurant or food-delivery searches.
+
+### Emotional scenes
+
+17. `staring_at_owner` — Leaning closer to the camera and looking at the owner. Trigger: seeking attention
+    while idle or preparing to send a notification.
+18. `daydreaming_hearts` — Gazing dreamily with floating hearts. Trigger: a long period of inactivity.
+19. `resting` — Relaxing with a pillow, blanket, and “Zzz” effects. Trigger: sleep mode or a task-free late
+    night.
+20. `dreaming` — Sleeping with a dream bubble. Trigger: sleep mode, with future support for a “Sweet Dreams
+    Service.”
+21. `grooming` — Looking in a mirror and touching up their appearance. Trigger: a random idle moment or a
+    compliment from the owner.
+22. `celebrating` — Tossing confetti. Trigger: completing a task milestone.
+23. `missing_you` — Looking out the window. Trigger: no owner interaction for a long time.
+24. `goodnight` — Turning off the lights under the moon. Trigger: late at night or when the owner says
+    goodnight.
+
 ## Build on macOS
 
 Requirements: macOS 14 or newer and Swift 6.2 or newer.

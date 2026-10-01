@@ -26,9 +26,14 @@ If a tool callback arrives before a model callback, the adapter emits `run_start
 
 Run and agent IDs are hashed in the agent process before transmission. Tool names may be classified locally, but arguments, outputs, prompts, and task text never enter the event payload.
 
+## Loopback endpoint
+
+The canonical default endpoint is `http://127.0.0.1:18765/v1/events`. Port 8765 is already occupied by another local service on the development Mac, so keeping it would leave the player running without an event listener. The app, official adapters, CLI examples, benchmark tool, and protocol documentation must use the same default. `JOYRIDE_PORT`, `JOYRIDE_ENDPOINT`, and the OpenClaw endpoint setting remain explicit overrides.
+
 ## Acceptance criteria
 
 - Every adapter emits one `run_started` before any event in a run.
 - Every completed run emits `run_finished` and clears adapter state.
 - The protocol schema and manifest triggers contain no `model_finished` or `idle` event kinds.
 - Adapter tests cover first-event ordering, repeated model calls, tool-first ordering, and completion.
+- The app and official clients agree on port `18765` when no override is configured.

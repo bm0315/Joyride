@@ -8,9 +8,9 @@ matching scene from a replaceable avatar pack. When work stops, the character re
 back at its owner.
 
 <p align="center">
-  <img src="Assets/packs/default/images/state-01-working.webp" width="31%" alt="Joyride agent working">
-  <img src="Assets/packs/default/images/state-06-researching.webp" width="31%" alt="Joyride agent researching">
-  <img src="Assets/packs/default/images/state-08-daydreaming-hearts.webp" width="31%" alt="Joyride agent daydreaming">
+  <img src="Assets/previews/working.gif" width="31%" alt="Animated Joyride agent working">
+  <img src="Assets/previews/researching.gif" width="31%" alt="Animated Joyride agent researching">
+  <img src="Assets/previews/daydreaming-hearts.gif" width="31%" alt="Animated Joyride agent daydreaming">
 </p>
 
 > Joyride is an independent, unofficial enhancement companion. It is not affiliated with or endorsed by

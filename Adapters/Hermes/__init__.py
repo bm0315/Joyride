@@ -17,7 +17,7 @@ from typing import Protocol
 
 
 LOGGER = logging.getLogger(__name__)
-DEFAULT_ENDPOINT = "http://127.0.0.1:8765/v1/events"
+DEFAULT_ENDPOINT = "http://127.0.0.1:18765/v1/events"
 REQUEST_TIMEOUT_SECONDS = 0.35
 
 

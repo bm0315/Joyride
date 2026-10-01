@@ -99,7 +99,7 @@ Uncertified packs remain importable and playable, but are excluded from marketpl
 
 ## Local event protocol: joyride/1
 
-Joyride listens only on `127.0.0.1:8765`.
+Joyride listens only on `127.0.0.1:18765` by default.
 
 ### Endpoints
 

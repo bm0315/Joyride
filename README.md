@@ -168,10 +168,10 @@ the latest measured values and limitations.
 ```bash
 python3 Tools/joyridectl.py tool_started \
   --source demo --activity-id run-1 --operation-id tool-1 \
-  --tool private --state-hint checking_flights --port 8765
+  --tool private --state-hint checking_flights --port 18765
 
 python3 Tools/joyridectl.py run_finished \
-  --source demo --activity-id run-1 --port 8765
+  --source demo --activity-id run-1 --port 18765
 ```
 
 Set `JOYRIDE_PORT` to change the app port. Set the OpenClaw plug-in `endpoint` or the Hermes

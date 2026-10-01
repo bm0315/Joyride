@@ -120,7 +120,7 @@ def hook_coverage(project: Path) -> dict[str, dict[str, object]]:
 
 def main() -> None:
     parser = argparse.ArgumentParser()
-    parser.add_argument("--base-url", default="http://127.0.0.1:8765")
+    parser.add_argument("--base-url", default="http://127.0.0.1:18765")
     parser.add_argument("--resource-seconds", type=int, default=5)
     parser.add_argument("--samples", type=int, default=3)
     parser.add_argument("--output", type=Path)

@@ -37,7 +37,7 @@ type PrivacyConfig = {
   keyword_blacklist: string[];
 };
 
-const defaultEndpoint = "http://127.0.0.1:8765/v1/events";
+const defaultEndpoint = "http://127.0.0.1:18765/v1/events";
 const requestTimeoutMilliseconds = 350;
 
 function readEndpoint(config: Record<string, unknown> | undefined): string {

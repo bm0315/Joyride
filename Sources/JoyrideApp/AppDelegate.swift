@@ -273,7 +273,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
 
     private func configuredPort() -> UInt16 {
         guard let rawValue = ProcessInfo.processInfo.environment["JOYRIDE_PORT"],
-              let port = UInt16(rawValue), port > 0 else { return 8_765 }
+              let port = UInt16(rawValue), port > 0 else { return 18_765 }
         return port
     }
 

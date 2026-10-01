@@ -1,0 +1,35 @@
+{
+  "measured_at": "2026-10-01T21:36:52+0800",
+  "state_switch_latency_ms_p50": 2.58,
+  "state_switch_latency_ms_p95": 154.05,
+  "state_switch_latency_samples_ms": [
+    154.05,
+    2.58,
+    1.93
+  ],
+  "cpu_percent_mean": 1.1,
+  "memory_rss_mb_mean": 80.41,
+  "hook_coverage": {
+    "OpenClaw": {
+      "covered": 4,
+      "expected": 4,
+      "hooks": [
+        "model_call_started",
+        "before_tool_call",
+        "after_tool_call",
+        "agent_end"
+      ]
+    },
+    "Hermes": {
+      "covered": 4,
+      "expected": 4,
+      "hooks": [
+        "pre_llm_call",
+        "pre_tool_call",
+        "post_tool_call",
+        "on_session_end"
+      ]
+    }
+  },
+  "resource_sample_seconds": 10
+}

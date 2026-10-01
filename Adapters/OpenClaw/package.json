@@ -1,0 +1,15 @@
+{
+  "name": "joyride-openclaw",
+  "version": "0.2.0",
+  "description": "Privacy-preserving OpenClaw lifecycle bridge for Joyride",
+  "type": "module",
+  "license": "MIT",
+  "openclaw": {
+    "extensions": [
+      "./index.ts"
+    ]
+  },
+  "peerDependencies": {
+    "openclaw": ">=2026.8.1"
+  }
+}

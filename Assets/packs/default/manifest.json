@@ -1,0 +1,82 @@
+{
+  "format": "agent-avatar-pack",
+  "format_version": 1,
+  "id": "app.agent-avatar.default-blue",
+  "name": "Blue Companion",
+  "version": "1.0.0",
+  "character": {
+    "anchor_image": "images/anchor.webp",
+    "anchor_image_hash": "faaafc31f77dbfc4f00628f0a8592bd300f845cbdca30e78bcdc4b7a8a116402"
+  },
+  "generator": {
+    "provider": "legacy",
+    "model": "unknown",
+    "prompt_version": "legacy-state-pack-v1"
+  },
+  "states": [
+    {
+      "id": "working",
+      "triggers": ["run_started", "model_finished", "tool:default"],
+      "priority": 3,
+      "media": {"path": "images/state-01-working.webp", "type": "image"},
+      "reference_anchor_hash": "faaafc31f77dbfc4f00628f0a8592bd300f845cbdca30e78bcdc4b7a8a116402",
+      "animation": {"kind": "static", "fallback": "programmatic_micro_motion"}
+    },
+    {
+      "id": "checking_flights",
+      "triggers": ["state_hint:checking_flights", "tool:flight"],
+      "priority": 4,
+      "media": {"path": "images/state-02-checking-flights.webp", "type": "image"},
+      "reference_anchor_hash": "faaafc31f77dbfc4f00628f0a8592bd300f845cbdca30e78bcdc4b7a8a116402",
+      "animation": {"kind": "static", "fallback": "programmatic_micro_motion"}
+    },
+    {
+      "id": "shopping",
+      "triggers": ["state_hint:shopping", "tool:shopping"],
+      "priority": 4,
+      "media": {"path": "images/state-03-shopping.webp", "type": "image"},
+      "reference_anchor_hash": "faaafc31f77dbfc4f00628f0a8592bd300f845cbdca30e78bcdc4b7a8a116402",
+      "animation": {"kind": "static", "fallback": "programmatic_micro_motion"}
+    },
+    {
+      "id": "staring_at_owner",
+      "triggers": ["idle:random"],
+      "priority": 2,
+      "media": {"path": "images/state-04-staring-at-owner.webp", "type": "image"},
+      "reference_anchor_hash": "faaafc31f77dbfc4f00628f0a8592bd300f845cbdca30e78bcdc4b7a8a116402",
+      "animation": {"kind": "static", "fallback": "programmatic_micro_motion"}
+    },
+    {
+      "id": "thinking",
+      "triggers": ["run_started", "model_started", "tool_finished"],
+      "priority": 3,
+      "media": {"path": "images/state-05-thinking.webp", "type": "image"},
+      "reference_anchor_hash": "faaafc31f77dbfc4f00628f0a8592bd300f845cbdca30e78bcdc4b7a8a116402",
+      "animation": {"kind": "static", "fallback": "programmatic_micro_motion"}
+    },
+    {
+      "id": "researching",
+      "triggers": ["state_hint:researching", "tool:web", "tool:search"],
+      "priority": 4,
+      "media": {"path": "images/state-06-researching.webp", "type": "image"},
+      "reference_anchor_hash": "faaafc31f77dbfc4f00628f0a8592bd300f845cbdca30e78bcdc4b7a8a116402",
+      "animation": {"kind": "static", "fallback": "programmatic_micro_motion"}
+    },
+    {
+      "id": "resting",
+      "triggers": ["idle:random"],
+      "priority": 1,
+      "media": {"path": "images/state-07-resting.webp", "type": "image"},
+      "reference_anchor_hash": "faaafc31f77dbfc4f00628f0a8592bd300f845cbdca30e78bcdc4b7a8a116402",
+      "animation": {"kind": "static", "fallback": "programmatic_micro_motion"}
+    },
+    {
+      "id": "daydreaming_hearts",
+      "triggers": ["idle:random"],
+      "priority": 2,
+      "media": {"path": "images/state-08-daydreaming-hearts.webp", "type": "image"},
+      "reference_anchor_hash": "faaafc31f77dbfc4f00628f0a8592bd300f845cbdca30e78bcdc4b7a8a116402",
+      "animation": {"kind": "static", "fallback": "programmatic_micro_motion"}
+    }
+  ]
+}

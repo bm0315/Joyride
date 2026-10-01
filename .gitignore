@@ -1,0 +1,10 @@
+.DS_Store
+.build/
+.build-support/
+.swiftpm/
+dist/
+__pycache__/
+*.pyc
+
+# Legacy source layout retained only in the private working copy. Avatar Pack v1 is canonical.
+Assets/animations/

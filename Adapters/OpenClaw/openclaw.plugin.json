@@ -1,0 +1,25 @@
+{
+  "id": "joyride",
+  "name": "Joyride",
+  "description": "Reflect agent lifecycle and tool activity in the local Joyride window.",
+  "activation": {
+    "onStartup": true
+  },
+  "configSchema": {
+    "type": "object",
+    "additionalProperties": false,
+    "properties": {
+      "endpoint": {
+        "type": "string",
+        "default": "http://127.0.0.1:8765/v1/events",
+        "description": "Loopback-only Joyride event endpoint."
+      }
+    }
+  },
+  "uiHints": {
+    "endpoint": {
+        "label": "Local Joyride endpoint",
+      "help": "Only loopback HTTP endpoints are accepted."
+    }
+  }
+}

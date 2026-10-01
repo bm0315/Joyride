@@ -1,0 +1,9 @@
+name: joyride
+version: "0.2.0"
+description: Privacy-preserving Hermes lifecycle bridge for the local Joyride app
+author: Joyride contributors
+provides_hooks:
+  - pre_llm_call
+  - pre_tool_call
+  - post_tool_call
+  - on_session_end
